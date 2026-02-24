@@ -1,0 +1,19 @@
+# --- Core ML & PV Modeling --- 
+pvlib >= 0.9.0
+pandas >= 1.0.0
+numpy >= 1.18.0
+scikit-learn >= 0.22.0
+torch >= 1.7.0
+
+# --- Data Visualization ---
+matplotlib >= 3.0.0
+seaborn >= 0.10.0
+
+# --- API  Framework --- 
+fastapi >= 0.110.0
+uvicorn[standard] >= 0.20.0
+pydantic >= 1.8.0
+requests >= 2.25.0
+
+# --- Development Tools ---
+jupyternotebook >= 6.0.0
