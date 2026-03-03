@@ -1,0 +1,107 @@
+{
+  "System": {
+    "system_id": 10001,
+    "site_id": 3491,
+    "public_name": "Pvoutput.org Bartfamily PV Array",
+    "area": "",
+    "power": "3.36",
+    "started_on": "2010-05-20 00:00:00",
+    "ended_on": "",
+    "comments": "PVOUTPUT_ID=1421",
+    "data_prize": "f",
+    "timezone_code": "America/New_York",
+    "us_region": "Unknown"
+  },
+  "Site": {
+    "site_id": "3491",
+    "name": "Pvoutput.org 1421 Bartfamily PV Array",
+    "public_name": "Pvoutput.org Bartfamily PV Array",
+    "location": "ZIP: 21009",
+    "us_region": "Unknown",
+    "latitude": "39.483937",
+    "longitude": "-76.301594",
+    "elevation": "51.222541809082",
+    "climate_type": "Cfa"
+  },
+  "Mount": {
+    "Mount 0": {
+      "mount_id": 12758,
+      "name": "Pvoutput.org 1421 Bartfamily PV Array_mount",
+      "manufacturer": "Unknown",
+      "model": "Unknown",
+      "tracking": "f",
+      "type": "unknown",
+      "azimuth": "180.0",
+      "tilt": "20.0"
+    }
+  },
+  "Inverters": {
+    "Inverter 0": {
+      "inverter_id": "16422",
+      "name": "Pvoutput.org 1421 Bartfamily PV Array_inverter",
+      "manufacturer": "SMA Sunnyboy 3000US",
+      "model": "SMA Sunnyboy 3000US",
+      "type": "Unknown",
+      "quantity": "1",
+      "serial_num": "Unknown",
+      "comments": "",
+      "time_interval": "L",
+      "modules_per_string": "",
+      "num_strings": ""
+    }
+  },
+  "Modules": {
+    "Module 0": {
+      "module_id": "13015",
+      "inverter_id": "None",
+      "name": "Pvoutput.org 1421 Bartfamily PV Array_module",
+      "manufacturer": "Evergreen ES-A-210-fa2",
+      "model": "Evergreen ES-A-210-fa2",
+      "type": "multi-Si",
+      "quantity": "16",
+      "start_on": "2010-05-20 00:00:00",
+      "end_on": "",
+      "serial_num": "Unknown",
+      "reference_module": "False",
+      "comments": "PVOUTPUT_ID=1421"
+    }
+  },
+  "Meters": {
+
+  },
+  "Other Instruments": {
+
+  },
+  "Metrics": {
+    "ac_energy_inv_16422": {
+      "metric_id": 87638,
+      "sensor_name": "ac_energy_kwh",
+      "common_name": "AC energy cumulative",
+      "raw_units": "Wh",
+      "units": "kWh",
+      "calc_scale": 0.001,
+      "calc_offset": 0,
+      "calc_details": null,
+      "aggregation_type": "avg",
+      "source_type": "INVERTER",
+      "source_id": 16422,
+      "comments": null,
+      "offline": false
+    },
+    "ac_power_inv_16422": {
+      "metric_id": 87639,
+      "sensor_name": "ac_power_W",
+      "common_name": "AC power",
+      "raw_units": "W",
+      "units": "kW",
+      "calc_scale": 0.001,
+      "calc_offset": 0,
+      "calc_details": null,
+      "aggregation_type": "avg",
+      "source_type": "INVERTER",
+      "source_id": 16422,
+      "comments": null,
+      "offline": false
+    }
+  }
+}
