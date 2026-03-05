@@ -23,7 +23,7 @@ class PVModelPipeline:
             latitude=config.SITE_LATITUDE, 
             longitude=config.SITE_LONGITUDE, 
             altitude=config.SITE_ALTITUDE, 
-            name=config.SITE_NANE
+            name=config.SITE_NAME
         )
         print(f"場域建立成功: {self.location.name}")
 
@@ -92,3 +92,18 @@ class PVModelPipeline:
         return self.modelchain.results.ac
     
 
+# --- 測試程式碼 ---
+if __name__ == "__main__":
+    # 測試 PVModelPipeline 的功能
+    pipeline = PVModelPipeline()
+
+    # 載入測試用的天氣資料
+    weather_data_path = "C:/Users/Pei/OneDrive/桌面/GitHub/pv_forecast/data/processed/processed_weather_data.csv"
+    weather_df = pd.read_csv(weather_data_path, index_col='datetime', parse_dates=True)
+    print("測試用的天氣資料載入成功，前5行:")
+    print(weather_df.head())
+
+    # 執行預測
+    predicted_ac_energy = pipeline.run(weather_df)
+    print("預測的交流電能量 (前5行):")
+    print(predicted_ac_energy.head())
