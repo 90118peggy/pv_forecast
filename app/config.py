@@ -6,21 +6,25 @@ API 配置API的模型路徑、參數
 
 """
 
-Location = {
-    'latitude': 35.76,
-    'longitude': -91.65,
-    'altitude': 81,
-    'name': 'U.S.'
-}
+# ---- 場域參數 ---- 
 
-System = {
-    'surface_tilt': 20,
-    'surface_azimuth': 180,
-    'modules_per_string': 2,
-    'strings_per_inverter': 1
-}
+SITE_LATITUDE = 35.76
+SITE_LONGITUDE = -91.65
+SITE_ALTITUDE = 81
+SITE_NANE = 'U.S.'
 
-Module_Parameters = {
+# ---- 系統參數 ----
+SURFACE_TILT = 20
+SURFACE_AZIMUTH = 180
+MODULES_PER_STRING = 2
+STRINGS_PER_INVERTER = 1
+
+# ---- 逆變器參數 ----
+INVERTER_DATABASE = 'SandiaInverter'
+INVERTER_NAME = 'SMA_America__SB3000US__240V_'
+
+# ---- 模組參數 ----
+MODULE_PARAMETERS = {
     'Name': 'Evergreen ES-A-210-fa2 (Manual)',
     'Technology': 'multi-Si',
     'Bifacial': 0, # 0 表示非雙面模組
@@ -46,12 +50,6 @@ Module_Parameters = {
     'R_sh_ref': 300  # 並聯電阻，如果沒有可以先用一個典型值
 }
 
-Inverter_Parameters = {
-    'database': 'SandiaInverter',
-    'Name': 'SMA_America__SB3000US__240V_',
-}
-
-Temperature_Model_Parameters = {
-    'model': 'sapm',
-    'type': 'open_rack_glass_polymer'
-}
+# ---- 溫度模型參數 ----
+from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
+TEMPERATURE_PARAMETERS = TEMPERATURE_MODEL_PARAMETERS['sapm']['open_rack_glass_polymer']
