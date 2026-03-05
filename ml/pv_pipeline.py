@@ -1,3 +1,4 @@
+import pandas as pd
 import pvlib
 from pvlib.location import Location
 from pvlib.modelchain import ModelChain
@@ -56,5 +57,38 @@ class PVModelPipeline:
         )
         print("ModelChain 建立成功")
 
-    def run(self):
-        pass 
+    def run(self, weather_df):
+        """
+        使用已經初始化好的 ModelChain 執行發電量預測。
+
+        Args:
+        weather_data (pd.DataFrame): 包含必要欄位的天氣資料 DataFrame，索引為 datetimeIndex，且包含以下欄位：
+            - temp_air
+            - temp_dew
+            - ghi
+            - dni
+            - dhi
+            - wind_speed
+            - wind_direction
+            - albedo
+            - pressure
+
+        Returns:
+            pd.DataFrame: 包含預測結果的 DataFrame，索引為 datetimeIndex，且包含以下欄位：
+                - ac: 預測的交流電能量 (kWh)
+        """
+
+        print("正在執行 PVModelPipeline 的 run 方法...")
+        
+        # 檢查傳入的 weather_df 是否為空
+        if weather_df.empty:
+            print("警告: 傳入的天氣資料 DataFrame 為空，無法進行預測。")
+            return pd.DataFrame()  # 返回一個空的 DataFrame
+        
+        # 執行預測
+        self.modelchain.run_model(weather_df)
+        print("預測完成，正在處理結果...")
+        
+        return self.modelchain.results.ac
+    
+
