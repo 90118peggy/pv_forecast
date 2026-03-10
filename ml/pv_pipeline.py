@@ -6,6 +6,7 @@ from pvlib.pvsystem import PVSystem
 from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
 
 from app import config
+from ml.model_trainer import MLBiasCorrector
 
 class PVModelPipeline:
     """
@@ -14,7 +15,7 @@ class PVModelPipeline:
     這個類別在初始化時會根據設定檔建立一個完整的 ModelChain，
     並提供一個 run 方法來執行預測。
     """
-    def __init__(self, ):
+    def __init__(self, use_ml_correction=True, model_path='models/bias_corrector.pkl'):
         """初始化 PVModelPipeline，建立 ModelChain 模型"""
         print("正在初始化 PVModelPipeline...")
 
@@ -57,6 +58,37 @@ class PVModelPipeline:
         )
         print("ModelChain 建立成功")
 
+        # 5. 初始化 ML 偏差修正器（可選）
+        self.use_ml_correction = use_ml_correction
+        self.bias_corrector = None
+        if self.use_ml_correction:
+            self.bias_corrector = MLBiasCorrector(model_path=model_path)
+            try:
+                self.bias_corrector.load_model()
+                print("ML 偏差修正模型載入成功")
+            except FileNotFoundError:
+                print("警告: 尚未找到 ML 偏差修正模型，將只回傳 PVLib 預測")
+
+    def _predict_physics(self, weather_df):
+        """執行 PVLib 物理模型預測。"""
+        self.modelchain.run_model(weather_df)
+        return self.modelchain.results.ac.rename('pvlib_ac')
+
+    def _apply_bias_correction(self, weather_df, pvlib_ac):
+        """套用 ML 偏差修正，回傳修正後預測。"""
+        if self.bias_corrector is None or not self.bias_corrector.is_trained:
+            return None
+
+        feature_df = self.bias_corrector.build_prediction_features(weather_df, pvlib_ac)
+        correction = pd.Series(
+            self.bias_corrector.predict_correction(feature_df),
+            index=pvlib_ac.index,
+            name='ml_correction'
+        )
+        corrected = (pvlib_ac + correction).rename('corrected_ac')
+
+        return pd.concat([pvlib_ac, correction, corrected], axis=1)
+
     def run(self, weather_df):
         """
         使用已經初始化好的 ModelChain 執行發電量預測。
@@ -74,8 +106,8 @@ class PVModelPipeline:
             - pressure
 
         Returns:
-            pd.DataFrame: 包含預測結果的 DataFrame，索引為 datetimeIndex，且包含以下欄位：
-                - ac: 預測的交流電能量 (kWh)
+            pd.DataFrame: 包含預測結果，至少有 `pvlib_ac`。
+            若成功載入 ML 模型，則另包含 `ml_correction` 與 `corrected_ac`。
         """
 
         print("正在執行 PVModelPipeline 的 run 方法...")
@@ -85,11 +117,17 @@ class PVModelPipeline:
             print("警告: 傳入的天氣資料 DataFrame 為空，無法進行預測。")
             return pd.DataFrame()  # 返回一個空的 DataFrame
         
-        # 執行預測
-        self.modelchain.run_model(weather_df)
+        # 先做物理模型預測
+        pvlib_ac = self._predict_physics(weather_df)
         print("預測完成，正在處理結果...")
+
+        # 再做機器學習偏差修正
+        if self.use_ml_correction:
+            corrected_result = self._apply_bias_correction(weather_df, pvlib_ac)
+            if corrected_result is not None:
+                return corrected_result
         
-        return self.modelchain.results.ac
+        return pd.DataFrame({'pvlib_ac': pvlib_ac})
     
 
 # --- 測試程式碼 ---
