@@ -133,11 +133,12 @@ class PVModelPipeline:
 # --- 測試程式碼 ---
 if __name__ == "__main__":
     # 測試 PVModelPipeline 的功能
+    from ml.data_loader import load_custom_weather_data
     pipeline = PVModelPipeline()
 
     # 載入測試用的天氣資料
     weather_data_path = "C:/Users/Pei/OneDrive/桌面/GitHub/pv_forecast/data/processed/processed_weather_data.csv"
-    weather_df = pd.read_csv(weather_data_path, index_col='datetime', parse_dates=True)
+    weather_df = load_custom_weather_data(weather_data_path)
     print("測試用的天氣資料載入成功，前5行:")
     print(weather_df.head())
 
