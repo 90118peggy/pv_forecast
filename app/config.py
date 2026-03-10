@@ -8,9 +8,9 @@ API 配置API的模型路徑、參數
 
 # ---- 場域參數 ---- 
 
-SITE_LATITUDE = 35.76
-SITE_LONGITUDE = -91.65
-SITE_ALTITUDE = 81
+SITE_LATITUDE = 39.48
+SITE_LONGITUDE = -76.301
+SITE_ALTITUDE = 52.22
 SITE_NAME = 'U.S.'
 
 # ---- 系統參數 ----

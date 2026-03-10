@@ -25,8 +25,8 @@ def load_custom_weather_data(file_path):
             raise ValueError(f"缺少必要的欄位: {col}")
     
     # 填補缺失值（如果有）
-    weather_data.fillna(method='ffill', inplace=True)  # 向前填補
-    weather_data.fillna(method='bfill', inplace=True)  # 向後填補
+    weather_data.ffill(inplace=True)  # 向前填補
+    weather_data.bfill(inplace=True)  # 向後填補
     
     return weather_data
 
@@ -48,7 +48,7 @@ def load_nsrdb_weather_data(email, api_key, latitude, longitude, year):
                                                         api_key=api_key, 
                                                         email=email, 
                                                         year=year,
-                                                    )
+                                                        )
     
     # 確保所有必要的欄位都存在
     required_columns = ['temp_air', 
