@@ -68,6 +68,20 @@ def parse_args():
         default=0.2,
         help='測試集比例，介於 0.0 到 1.0 之間（預設：0.2）'
     )
+    parser.add_argument(
+        '--split-method',
+        type=str,
+        choices=['random', 'time', 'both'],
+        default='both',
+        help='訓練/評估切分方式：random、time，或 both（同時輸出兩種結果）'
+    )
+    parser.add_argument(
+        '--save-split',
+        type=str,
+        choices=['random', 'time'],
+        default='time',
+        help='當 split-method=both 時，指定要儲存哪一種切分訓練出的模型（預設：time）'
+    )
     return parser.parse_args()
 
 
@@ -82,6 +96,7 @@ def main():
     print(f"實際發電數據路徑：{args.actual_path}")
     print(f"模型輸出路徑：{args.model_output}")
     print(f"測試集比例：{args.test_size}")
+    print(f"切分方式：{args.split_method}")
     print()
 
     # ----------------------------------------------------------------
@@ -156,20 +171,50 @@ def main():
     # ----------------------------------------------------------------
     print()
     print("[Step 5] 訓練 ML 偏差修正模型...")
-    corrector = MLBiasCorrector(model_path=args.model_output)
-    X, y = corrector.prepare_training_data(weather_train, pvlib_kw, actual_kw)
+    base_corrector = MLBiasCorrector(model_path=args.model_output)
+    X, y = base_corrector.prepare_training_data(weather_train, pvlib_kw, actual_kw)
 
     print(f"  訓練特徵筆數：{len(X)}")
     print(f"  訓練特徵欄位：{list(X.columns)}")
 
-    metrics = corrector.train(X, y, test_size=args.test_size)
+    split_methods = ['random', 'time'] if args.split_method == 'both' else [args.split_method]
+    trained_models = {}
+    metrics_by_split = {}
 
-    print()
-    print("  訓練結果：")
-    print(f"    訓練集 MAE：{metrics['train_mae']:.4f} kW")
-    print(f"    訓練集 RMSE：{metrics['train_rmse']:.4f} kW")
-    print(f"    測試集 MAE：{metrics['test_mae']:.4f} kW")
-    print(f"    測試集 RMSE：{metrics['test_rmse']:.4f} kW")
+    for split_method in split_methods:
+        trainer = MLBiasCorrector(model_path=args.model_output)
+        trainer.feature_names = list(base_corrector.feature_names)
+
+        metrics = trainer.train(X, y, test_size=args.test_size, split_method=split_method)
+
+        trained_models[split_method] = trainer
+        metrics_by_split[split_method] = metrics
+
+        print()
+        print(f"  [{split_method}] 訓練結果：")
+        print(f"    訓練集筆數：{metrics['train_size']}")
+        print(f"    測試集筆數：{metrics['test_size']}")
+        print(f"    訓練集 MAE：{metrics['train_mae']:.4f} kW")
+        print(f"    訓練集 RMSE：{metrics['train_rmse']:.4f} kW")
+        print(f"    測試集 MAE：{metrics['test_mae']:.4f} kW")
+        print(f"    測試集 RMSE：{metrics['test_rmse']:.4f} kW")
+
+    if args.split_method == 'both':
+        print()
+        print("  [比較摘要] 兩種切分測試集指標：")
+        print(
+            "    random -> "
+            f"MAE: {metrics_by_split['random']['test_mae']:.4f} kW, "
+            f"RMSE: {metrics_by_split['random']['test_rmse']:.4f} kW"
+        )
+        print(
+            "    time   -> "
+            f"MAE: {metrics_by_split['time']['test_mae']:.4f} kW, "
+            f"RMSE: {metrics_by_split['time']['test_rmse']:.4f} kW"
+        )
+
+    selected_split = args.save_split if args.split_method == 'both' else args.split_method
+    corrector = trained_models[selected_split]
 
     # ----------------------------------------------------------------
     # Step 6：儲存模型
@@ -177,6 +222,7 @@ def main():
     print()
     print("[Step 6] 儲存模型...")
     corrector.save_model()
+    print(f"  已儲存切分方式：{selected_split}")
 
     print()
     print("=" * 60)

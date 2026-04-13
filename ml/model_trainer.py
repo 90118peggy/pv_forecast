@@ -92,7 +92,36 @@ class MLBiasCorrector:
 
         return prediction_data[self.feature_names]
     
-    def train(self, X, y, test_size=0.2):
+    def _split_data(self, X, y, test_size=0.2, split_method='random'):
+        """依照指定策略切分訓練/測試資料。"""
+        if not (0.0 < test_size < 1.0):
+            raise ValueError(f"test_size 必須介於 0.0 到 1.0 之間，目前值：{test_size}")
+
+        if split_method == 'random':
+            return train_test_split(X, y, test_size=test_size, random_state=42)
+
+        if split_method == 'time':
+            # 時序切分：前段做訓練，後段做測試，避免未來資訊洩漏。
+            if len(X) < 2:
+                raise ValueError("資料筆數不足，無法做 time split")
+
+            if isinstance(X.index, pd.DatetimeIndex):
+                X = X.sort_index()
+                y = y.loc[X.index]
+
+            split_idx = int(len(X) * (1 - test_size))
+            if split_idx <= 0 or split_idx >= len(X):
+                raise ValueError("切分後訓練集或測試集為空，請調整 test_size")
+
+            X_train = X.iloc[:split_idx]
+            X_test = X.iloc[split_idx:]
+            y_train = y.loc[X_train.index]
+            y_test = y.loc[X_test.index]
+            return X_train, X_test, y_train, y_test
+
+        raise ValueError("split_method 僅支援 'random' 或 'time'")
+
+    def train(self, X, y, test_size=0.2, split_method='random'):
         """
         訓練偏差修正模型
         
@@ -100,12 +129,13 @@ class MLBiasCorrector:
             X (pd.DataFrame): 特徵矩陣
             y (pd.Series): 目標變數（殘差）
             test_size: 測試集比例
+            split_method: 資料切分方式（'random' 或 'time'）
         """
-        print("正在訓練偏差修正模型...")
+        print(f"正在訓練偏差修正模型... (split={split_method})")
         
         # 分割訓練集和測試集
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=test_size, random_state=42
+        X_train, X_test, y_train, y_test = self._split_data(
+            X, y, test_size=test_size, split_method=split_method
         )
         
         # 訓練模型
@@ -126,6 +156,9 @@ class MLBiasCorrector:
         self.is_trained = True
         
         return {
+            'split_method': split_method,
+            'train_size': len(X_train),
+            'test_size': len(X_test),
             'train_mae': train_mae,
             'test_mae': test_mae,
             'train_rmse': train_rmse,
