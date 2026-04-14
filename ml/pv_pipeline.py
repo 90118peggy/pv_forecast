@@ -13,6 +13,10 @@ class PVModelPipeline:
     一個整合了PVLib的數位孿生模型管道，負責從資料載入、模型建立到預測的整個流程。
 
     這個類別在初始化時會根據設定檔建立一個完整的 ModelChain，
+    會預先設定是否此次訓練需要使用ML的偏差修正，
+    可以設定是否有加入偏差修正，
+    雖然是同一個Pipeline但是存在兩種不同的模式，
+    分別是純物理模型預測和物理模型加上ML偏差修正的預測，
     並提供一個 run 方法來執行預測。
     """
     def __init__(self, use_ml_correction=True, model_path='models/bias_corrector.pkl'):

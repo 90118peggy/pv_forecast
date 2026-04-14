@@ -120,8 +120,11 @@ class MLBiasCorrector:
             return X_train, X_test, y_train, y_test
 
         raise ValueError("split_method 僅支援 'random' 或 'time'")
+    
+    def _daytime_filter(self, X):
+        pass
 
-    def train(self, X, y, test_size=0.2, split_method='random'):
+    def train(self, X, y, test_size=0.2, split_method='random', daytime_only=False):
         """
         訓練偏差修正模型
         
@@ -138,6 +141,11 @@ class MLBiasCorrector:
             X, y, test_size=test_size, split_method=split_method
         )
         
+        # 可選：只使用白天資料訓練
+        if daytime_only:
+            X = self._daytime_filter(X)
+            y = y[X.index]
+
         # 訓練模型
         self.model.fit(X_train, y_train)
         

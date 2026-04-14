@@ -173,6 +173,9 @@ def main():
     print("[Step 5] 訓練 ML 偏差修正模型...")
     base_corrector = MLBiasCorrector(model_path=args.model_output)
     X, y = base_corrector.prepare_training_data(weather_train, pvlib_kw, actual_kw)
+    # 這裡需要寫一個Daytime Focus 的資料提取方法，確保訓練資料只包含白天的數據（例如：GHI > 0）
+    # X = X[X['GHI'] > 0]
+    # y = y[X.index]
 
     print(f"  訓練特徵筆數：{len(X)}")
     print(f"  訓練特徵欄位：{list(X.columns)}")
