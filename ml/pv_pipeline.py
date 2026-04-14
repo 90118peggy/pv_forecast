@@ -83,15 +83,28 @@ class PVModelPipeline:
         if self.bias_corrector is None or not self.bias_corrector.is_trained:
             return None
 
+        # 1. 建立完整推論特徵 DataFrame，包含天氣資料和 PVLib 預測值
         feature_df = self.bias_corrector.build_prediction_features(weather_df, pvlib_ac)
-        correction = pd.Series(
-            self.bias_corrector.predict_correction(feature_df),
-            index=pvlib_ac.index,
-            name='ml_correction'
-        )
+
+        # 2. 建立白天遮罩
+        daytime_mask = self.bias_corrector.build_daytime_mask(feature_df)
+
+        # 3. 先建立完整時間軸上的correction，夜間預設為 0
+        correction = pd.Series(0, index=pvlib_ac.index, name='ml_correction')
+
+        # 4. 只對白天資料進行ML偏差修正預測
+        if daytime_mask.any():
+            daytime_features = feature_df.loc[daytime_mask]
+            daytime_correction = self.bias_corrector.predict_correction(daytime_features)
+            correction.loc[daytime_mask] = daytime_correction
+
+        # 5. 計算修正後的預測值
         corrected = (pvlib_ac + correction).rename('corrected_ac')
 
-        return pd.concat([pvlib_ac, correction, corrected], axis=1)
+        return pd.concat([pvlib_ac, 
+                          daytime_mask.rename('is_daytime'), 
+                          correction, 
+                          corrected], axis=1)
 
     def run(self, weather_df):
         """

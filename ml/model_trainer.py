@@ -97,6 +97,9 @@ class MLBiasCorrector:
 
         return prediction_data[self.feature_names]
     
+    def build_daytime_mask(self, X):
+        return self._build_daytime_mask(X)
+
     def _split_data(self, X, y, test_size=0.2, split_method='random'):
         """依照指定策略切分訓練/測試資料。"""
         if not (0.0 < test_size < 1.0):
@@ -220,6 +223,7 @@ class MLBiasCorrector:
         payload = {
             'model': self.model,
             'feature_names': self.feature_names,
+            'daytime_config': self.daytime_config
         }
         joblib.dump(payload, self.model_path)
         print(f"模型已儲存至: {self.model_path}")
