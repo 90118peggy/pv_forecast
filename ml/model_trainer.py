@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.base import clone
 import joblib
 import os
 
@@ -131,6 +132,158 @@ class MLBiasCorrector:
             return X_train, X_test, y_train, y_test
 
         raise ValueError("split_method 僅支援 'random' 或 'time'")
+
+    def _resolve_window_size(self, size, n_samples, name):
+        """將比例或整數視窗大小轉成樣本數。"""
+        if isinstance(size, float):
+            if not (0 < size < 1):
+                raise ValueError(f"{name} 若為 float，必須介於 0 到 1 之間，目前值：{size}")
+            resolved = int(n_samples * size)
+        else:
+            resolved = int(size)
+
+        if resolved <= 0:
+            raise ValueError(f"{name} 解析後必須大於 0，目前值：{resolved}")
+
+        return resolved
+
+    def generate_walk_forward_splits(
+        self,
+        X,
+        y,
+        initial_train_size=0.5,
+        test_size=0.1,
+        step_size=None,
+        strategy='expanding',
+        train_window=None,
+        max_splits=None
+    ):
+        """建立 walk-forward 切分索引，支援 expanding 與 rolling。"""
+        if not isinstance(X.index, pd.DatetimeIndex):
+            raise ValueError("walk-forward 需要 DatetimeIndex")
+
+        X = X.sort_index()
+        y = y.loc[X.index]
+
+        n_samples = len(X)
+        if n_samples < 3:
+            raise ValueError("資料筆數不足，無法進行 walk-forward")
+
+        train_n = self._resolve_window_size(initial_train_size, n_samples, 'initial_train_size')
+        test_n = self._resolve_window_size(test_size, n_samples, 'test_size')
+        step_n = test_n if step_size is None else self._resolve_window_size(step_size, n_samples, 'step_size')
+
+        if train_n + test_n > n_samples:
+            raise ValueError("initial_train_size + test_size 超過資料總長度")
+
+        if strategy not in ['expanding', 'rolling']:
+            raise ValueError("strategy 僅支援 'expanding' 或 'rolling'")
+
+        rolling_window_n = None
+        if strategy == 'rolling':
+            if train_window is None:
+                rolling_window_n = train_n
+            else:
+                rolling_window_n = self._resolve_window_size(train_window, n_samples, 'train_window')
+
+        splits = []
+        train_end = train_n
+        split_count = 0
+
+        while train_end + test_n <= n_samples:
+            if strategy == 'expanding':
+                train_start = 0
+            else:
+                train_start = max(0, train_end - rolling_window_n)
+
+            test_start = train_end
+            test_end = train_end + test_n
+
+            X_train = X.iloc[train_start:train_end]
+            X_test = X.iloc[test_start:test_end]
+            y_train = y.loc[X_train.index]
+            y_test = y.loc[X_test.index]
+
+            if len(X_train) == 0 or len(X_test) == 0:
+                break
+
+            splits.append((X_train, X_test, y_train, y_test))
+
+            split_count += 1
+            if max_splits is not None and split_count >= int(max_splits):
+                break
+
+            train_end += step_n
+
+        if not splits:
+            raise ValueError("無法建立任何 walk-forward splits，請調整視窗大小")
+
+        return splits
+
+    def evaluate_walk_forward(
+        self,
+        X,
+        y,
+        initial_train_size=0.5,
+        test_size=0.1,
+        step_size=None,
+        strategy='expanding',
+        train_window=None,
+        daytime_only=False,
+        max_splits=None
+    ):
+        """以 walk-forward 方式進行多次切分評估。"""
+        splits = self.generate_walk_forward_splits(
+            X,
+            y,
+            initial_train_size=initial_train_size,
+            test_size=test_size,
+            step_size=step_size,
+            strategy=strategy,
+            train_window=train_window,
+            max_splits=max_splits
+        )
+
+        records = []
+        for fold, (X_train, X_test, y_train, y_test) in enumerate(splits, start=1):
+            fold_model = clone(self.model)
+
+            X_train_fold = X_train
+            y_train_fold = y_train
+            if daytime_only:
+                mask = self._build_daytime_mask(X_train_fold)
+                X_train_fold = X_train_fold.loc[mask]
+                y_train_fold = y_train_fold.loc[mask]
+
+            if len(X_train_fold) == 0:
+                continue
+
+            fold_model.fit(X_train_fold, y_train_fold)
+            y_pred = fold_model.predict(X_test)
+
+            mae = mean_absolute_error(y_test, y_pred)
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+            peak = np.max(np.abs(y_test))
+            acc = max(0.0, (1 - (mae / peak)) * 100) if peak > 0 else float('nan')
+
+            records.append({
+                'fold': fold,
+                'strategy': strategy,
+                'train_start': X_train_fold.index.min(),
+                'train_end': X_train_fold.index.max(),
+                'test_start': X_test.index.min(),
+                'test_end': X_test.index.max(),
+                'train_size': len(X_train_fold),
+                'test_size': len(X_test),
+                'test_mae_kW': mae,
+                'test_rmse_kW': rmse,
+                'accuracy_percent_peak_norm': acc,
+            })
+
+        if not records:
+            raise ValueError("walk-forward 評估失敗：無可用 fold（可能被 daytime_only 過濾為空）")
+
+        return pd.DataFrame(records)
     
     def _build_daytime_mask(self, 
                             X,
