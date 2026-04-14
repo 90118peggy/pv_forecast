@@ -90,7 +90,7 @@ class PVModelPipeline:
         daytime_mask = self.bias_corrector.build_daytime_mask(feature_df)
 
         # 3. 先建立完整時間軸上的correction，夜間預設為 0
-        correction = pd.Series(0, index=pvlib_ac.index, name='ml_correction')
+        correction = pd.Series(0.0, index=pvlib_ac.index, name='ml_correction')
 
         # 4. 只對白天資料進行ML偏差修正預測
         if daytime_mask.any():

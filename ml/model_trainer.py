@@ -33,9 +33,12 @@ class MLBiasCorrector:
         self.feature_names = None
         self.is_trained = False
         self.daytime_config = {
-            'pvlib_threshold': 0.1,  # PVLib 預測值大於此閾值視為白天
-            'ghi_threshold': 20,      # GHI 大於此閾值視為白天
-            'use_ghi': True          # 是否使用 GHI 作為輔助判斷
+            'pvlib_threshold': 0.00,  # PVLib 預測值大於此閾值視為白天
+            'ghi_threshold': 0.1,    # GHI 大於此閾值視為白天
+            'use_ghi': True,         # 是否使用 GHI 作為輔助判斷
+            'use_time_window': False,  # 是否啟用時段判斷
+            'day_start_hour': 5,     # 白天開始小時 (含)
+            'day_end_hour': 19       # 白天結束小時 (不含)
         }
 
     def prepare_training_data(self, weather_df, pvlib_predictions, actual_power):
@@ -139,10 +142,34 @@ class MLBiasCorrector:
         """
         if 'pvlib_prediction' not in X.columns:
             raise ValueError("X 中缺少 'pvlib_prediction' 欄位，無法根據 PVLib 預測值建立白天遮罩")
-        mask = X['pvlib_prediction'] > self.daytime_config['pvlib_threshold']
+
+        pvlib_mask = X['pvlib_prediction'] >= self.daytime_config['pvlib_threshold']
+
+        masks = [pvlib_mask]
 
         if self.daytime_config['use_ghi'] and 'ghi' in X.columns:
-            mask = mask | (X['ghi'] > self.daytime_config['ghi_threshold'])
+            ghi_mask = X['ghi'] >= self.daytime_config['ghi_threshold']
+            masks.append(ghi_mask)
+
+        if self.daytime_config.get('use_time_window', False):
+            if not isinstance(X.index, pd.DatetimeIndex):
+                raise ValueError("啟用 use_time_window 時，X.index 必須是 DatetimeIndex")
+
+            start_hour = int(self.daytime_config.get('day_start_hour', 5))
+            end_hour = int(self.daytime_config.get('day_end_hour', 19))
+            hour_series = pd.Series(X.index.hour, index=X.index)
+
+            # 支援跨日區間，例如 20~6。
+            if start_hour < end_hour:
+                time_mask = (hour_series >= start_hour) & (hour_series < end_hour)
+            else:
+                time_mask = (hour_series >= start_hour) | (hour_series < end_hour)
+
+            masks.append(time_mask)
+
+        mask = masks[0]
+        for extra_mask in masks[1:]:
+            mask = mask | extra_mask
 
         return mask.fillna(False)
 
@@ -236,6 +263,7 @@ class MLBiasCorrector:
             # 向後相容：如果舊檔案只儲存 model 物件，仍可正常載入
             if isinstance(payload, dict) and 'model' in payload:
                 self.model = payload['model']
+                self.daytime_config = payload.get('daytime_config', self.daytime_config)
                 self.feature_names = payload.get('feature_names')
             else:
                 self.model = payload
