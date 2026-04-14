@@ -32,6 +32,11 @@ class MLBiasCorrector:
         )
         self.feature_names = None
         self.is_trained = False
+        self.daytime_config = {
+            'pvlib_threshold': 0.1,  # PVLib 預測值大於此閾值視為白天
+            'ghi_threshold': 20,      # GHI 大於此閾值視為白天
+            'use_ghi': True          # 是否使用 GHI 作為輔助判斷
+        }
 
     def prepare_training_data(self, weather_df, pvlib_predictions, actual_power):
         """
@@ -121,10 +126,24 @@ class MLBiasCorrector:
 
         raise ValueError("split_method 僅支援 'random' 或 'time'")
     
-    def _build_daytime_mask(self, X):
-        # 這裡可以根據具體需求實現白天資料的過濾邏輯
-        # 例如：假設 GHI 欄位代表全球水平輻射，白天時值應大於 0
-        return X['GHI'] > 0
+    def _build_daytime_mask(self, 
+                            X,
+                            ):
+        """建立白天資料的遮罩，確保訓練資料只包含白天的數據。
+        # 這裡可以根據具體需求實現白天資料的過濾邏輯，例如：
+        - 根據 PVLib 預測值是否大於某個閾值來判斷是否為白天
+        - 或者結合 GHI 值來進行更精確的判斷
+        """
+        if 'pvlib_prediction' not in X.columns:
+            raise ValueError("X 中缺少 'pvlib_prediction' 欄位，無法根據 PVLib 預測值建立白天遮罩")
+        mask = X['pvlib_prediction'] > self.daytime_config['pvlib_threshold']
+
+        if self.daytime_config['use_ghi'] and 'ghi' in X.columns:
+            mask = mask | (X['ghi'] > self.daytime_config['ghi_threshold'])
+
+        return mask.fillna(False)
+
+        
 
     def train(self, X, y, test_size=0.2, split_method='random', daytime_only=False):
         """
