@@ -121,8 +121,10 @@ class MLBiasCorrector:
 
         raise ValueError("split_method 僅支援 'random' 或 'time'")
     
-    def _daytime_filter(self, X):
-        pass
+    def _build_daytime_mask(self, X):
+        # 這裡可以根據具體需求實現白天資料的過濾邏輯
+        # 例如：假設 GHI 欄位代表全球水平輻射，白天時值應大於 0
+        return X['GHI'] > 0
 
     def train(self, X, y, test_size=0.2, split_method='random', daytime_only=False):
         """
@@ -142,9 +144,11 @@ class MLBiasCorrector:
         )
         
         # 可選：只使用白天資料訓練
+        # 使用mask可以讓index對齊，確保X_train和y_train的index一致，避免後續訓練時出現index不匹配的問題。
         if daytime_only:
-            X = self._daytime_filter(X)
-            y = y[X.index]
+            mask = self._build_daytime_mask(X_train)
+            X_train = X_train.loc[mask]
+            y_train = y_train.loc[mask]
 
         # 訓練模型
         self.model.fit(X_train, y_train)
