@@ -18,6 +18,8 @@
 import argparse
 import sys
 import os
+import numpy as np
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 # 確保從 scripts/ 資料夾執行時，可以找到 ml/ 和 app/ 模組
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -71,9 +73,9 @@ def parse_args():
     parser.add_argument(
         '--split-method',
         type=str,
-        choices=['random', 'time', 'both'],
+        choices=['random', 'time', 'both', 'walk-forward'],
         default='both',
-        help='訓練/評估切分方式：random、time，或 both（同時輸出兩種結果）'
+        help='訓練/評估切分方式：random、time、both，或 walk-forward'
     )
     parser.add_argument(
         '--save-split',
@@ -81,6 +83,55 @@ def parse_args():
         choices=['random', 'time'],
         default='time',
         help='當 split-method=both 時，指定要儲存哪一種切分訓練出的模型（預設：time）'
+    )
+    parser.add_argument(
+        '--wf-strategy',
+        type=str,
+        choices=['expanding', 'rolling'],
+        default='rolling',
+        help='walk-forward 切分策略（預設：rolling）'
+    )
+    parser.add_argument(
+        '--wf-initial-train-size',
+        type=float,
+        default=0.5,
+        help='walk-forward 初始訓練視窗比例（預設：0.5）'
+    )
+    parser.add_argument(
+        '--wf-test-size',
+        type=float,
+        default=0.1,
+        help='walk-forward 每折測試視窗比例（預設：0.1）'
+    )
+    parser.add_argument(
+        '--wf-step-size',
+        type=float,
+        default=0.1,
+        help='walk-forward 每次前進步長比例（預設：0.1）'
+    )
+    parser.add_argument(
+        '--wf-train-window',
+        type=float,
+        default=0.5,
+        help='rolling 策略訓練窗比例（預設：0.5；expanding 會忽略）'
+    )
+    parser.add_argument(
+        '--wf-max-splits',
+        type=int,
+        default=5,
+        help='walk-forward 最多折數（預設：5）'
+    )
+    parser.add_argument(
+        '--wf-daytime-only',
+        action='store_true',
+        help='walk-forward 訓練時只使用白天樣本'
+    )
+    parser.add_argument(
+        '--wf-save-train-mode',
+        type=str,
+        choices=['last-window', 'all-data'],
+        default='last-window',
+        help='walk-forward 儲存模型時的最終重訓方式（預設：last-window）'
     )
     return parser.parse_args()
 
@@ -97,6 +148,18 @@ def main():
     print(f"模型輸出路徑：{args.model_output}")
     print(f"測試集比例：{args.test_size}")
     print(f"切分方式：{args.split_method}")
+    if args.split_method == 'walk-forward':
+        print(
+            "walk-forward 設定："
+            f"strategy={args.wf_strategy}, "
+            f"initial={args.wf_initial_train_size}, "
+            f"test={args.wf_test_size}, "
+            f"step={args.wf_step_size}, "
+            f"train_window={args.wf_train_window}, "
+            f"max_splits={args.wf_max_splits}, "
+            f"daytime_only={args.wf_daytime_only}, "
+            f"save_train_mode={args.wf_save_train_mode}"
+        )
     print()
 
     # ----------------------------------------------------------------
@@ -184,40 +247,133 @@ def main():
     trained_models = {}
     metrics_by_split = {}
 
-    for split_method in split_methods:
-        trainer = MLBiasCorrector(model_path=args.model_output)
-        trainer.feature_names = list(base_corrector.feature_names)
+    if args.split_method == 'walk-forward':
+        wf_trainer = MLBiasCorrector(model_path=args.model_output)
+        wf_trainer.feature_names = list(base_corrector.feature_names)
 
-        metrics = trainer.train(X, y, test_size=args.test_size, split_method=split_method)
-
-        trained_models[split_method] = trainer
-        metrics_by_split[split_method] = metrics
-
-        print()
-        print(f"  [{split_method}] 訓練結果：")
-        print(f"    訓練集筆數：{metrics['train_size']}")
-        print(f"    測試集筆數：{metrics['test_size']}")
-        print(f"    訓練集 MAE：{metrics['train_mae']:.4f} kW")
-        print(f"    訓練集 RMSE：{metrics['train_rmse']:.4f} kW")
-        print(f"    測試集 MAE：{metrics['test_mae']:.4f} kW")
-        print(f"    測試集 RMSE：{metrics['test_rmse']:.4f} kW")
-
-    if args.split_method == 'both':
-        print()
-        print("  [比較摘要] 兩種切分測試集指標：")
-        print(
-            "    random -> "
-            f"MAE: {metrics_by_split['random']['test_mae']:.4f} kW, "
-            f"RMSE: {metrics_by_split['random']['test_rmse']:.4f} kW"
-        )
-        print(
-            "    time   -> "
-            f"MAE: {metrics_by_split['time']['test_mae']:.4f} kW, "
-            f"RMSE: {metrics_by_split['time']['test_rmse']:.4f} kW"
+        wf_metrics = wf_trainer.evaluate_walk_forward(
+            X,
+            y,
+            initial_train_size=args.wf_initial_train_size,
+            test_size=args.wf_test_size,
+            step_size=args.wf_step_size,
+            strategy=args.wf_strategy,
+            train_window=args.wf_train_window,
+            daytime_only=args.wf_daytime_only,
+            max_splits=args.wf_max_splits,
         )
 
-    selected_split = args.save_split if args.split_method == 'both' else args.split_method
-    corrector = trained_models[selected_split]
+        print()
+        print("  [walk-forward] 各 fold 測試結果：")
+        print(
+            wf_metrics[
+                [
+                    'fold',
+                    'train_size',
+                    'test_size',
+                    'test_mae_kW',
+                    'test_rmse_kW',
+                    'accuracy_percent_peak_norm',
+                ]
+            ].to_string(
+                index=False,
+                formatters={
+                    'test_mae_kW': '{:.4f}'.format,
+                    'test_rmse_kW': '{:.4f}'.format,
+                    'accuracy_percent_peak_norm': '{:.2f}'.format,
+                },
+            )
+        )
+
+        print()
+        print("  [walk-forward] 平均結果：")
+        print(f"    平均 MAE：{wf_metrics['test_mae_kW'].mean():.4f} kW")
+        print(f"    平均 RMSE：{wf_metrics['test_rmse_kW'].mean():.4f} kW")
+        print(f"    平均 Accuracy：{wf_metrics['accuracy_percent_peak_norm'].mean():.2f}%")
+
+        saver = MLBiasCorrector(model_path=args.model_output)
+        saver.feature_names = list(base_corrector.feature_names)
+
+        if args.wf_save_train_mode == 'all-data':
+            X_final = X
+            y_final = y
+            mode_text = 'all-data'
+        else:
+            wf_splits = saver.generate_walk_forward_splits(
+                X,
+                y,
+                initial_train_size=args.wf_initial_train_size,
+                test_size=args.wf_test_size,
+                step_size=args.wf_step_size,
+                strategy=args.wf_strategy,
+                train_window=args.wf_train_window,
+                max_splits=args.wf_max_splits,
+            )
+            X_final, _, y_final, _ = wf_splits[-1]
+            mode_text = 'last-window'
+
+        if args.wf_daytime_only:
+            day_mask = saver.build_daytime_mask(X_final)
+            X_fit = X_final.loc[day_mask]
+            y_fit = y_final.loc[day_mask]
+        else:
+            X_fit = X_final
+            y_fit = y_final
+
+        if len(X_fit) == 0:
+            print("[錯誤] 儲存模型前可用訓練樣本為 0，請調整 walk-forward 或 daytime-only 參數")
+            sys.exit(1)
+
+        saver.model.fit(X_fit, y_fit)
+        train_pred = saver.model.predict(X_fit)
+        train_mae = mean_absolute_error(y_fit, train_pred)
+        train_rmse = np.sqrt(mean_squared_error(y_fit, train_pred))
+        saver.is_trained = True
+
+        print()
+        print("  [walk-forward] 儲存模型前最終重訓：")
+        print(f"    重訓模式：{mode_text}")
+        print(f"    訓練樣本數：{len(X_fit)}")
+        print(f"    訓練集 MAE：{train_mae:.4f} kW")
+        print(f"    訓練集 RMSE：{train_rmse:.4f} kW")
+
+        corrector = saver
+        selected_split = f"walk-forward ({args.wf_strategy})"
+    else:
+        for split_method in split_methods:
+            trainer = MLBiasCorrector(model_path=args.model_output)
+            trainer.feature_names = list(base_corrector.feature_names)
+
+            metrics = trainer.train(X, y, test_size=args.test_size, split_method=split_method)
+
+            trained_models[split_method] = trainer
+            metrics_by_split[split_method] = metrics
+
+            print()
+            print(f"  [{split_method}] 訓練結果：")
+            print(f"    訓練集筆數：{metrics['train_size']}")
+            print(f"    測試集筆數：{metrics['test_size']}")
+            print(f"    訓練集 MAE：{metrics['train_mae']:.4f} kW")
+            print(f"    訓練集 RMSE：{metrics['train_rmse']:.4f} kW")
+            print(f"    測試集 MAE：{metrics['test_mae']:.4f} kW")
+            print(f"    測試集 RMSE：{metrics['test_rmse']:.4f} kW")
+
+        if args.split_method == 'both':
+            print()
+            print("  [比較摘要] 兩種切分測試集指標：")
+            print(
+                "    random -> "
+                f"MAE: {metrics_by_split['random']['test_mae']:.4f} kW, "
+                f"RMSE: {metrics_by_split['random']['test_rmse']:.4f} kW"
+            )
+            print(
+                "    time   -> "
+                f"MAE: {metrics_by_split['time']['test_mae']:.4f} kW, "
+                f"RMSE: {metrics_by_split['time']['test_rmse']:.4f} kW"
+            )
+
+        selected_split = args.save_split if args.split_method == 'both' else args.split_method
+        corrector = trained_models[selected_split]
 
     # ----------------------------------------------------------------
     # Step 6：儲存模型
