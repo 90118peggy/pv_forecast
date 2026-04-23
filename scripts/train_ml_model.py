@@ -71,6 +71,45 @@ def parse_args():
         help='測試集比例，介於 0.0 到 1.0 之間（預設：0.2）'
     )
     parser.add_argument(
+        '--daytime-only',
+        action='store_true',
+        help='訓練時只使用白天樣本'
+    )
+    parser.add_argument(
+        '--daytime-ghi-threshold',
+        type=float,
+        default=0.1,
+        help='白天判斷的 GHI 閾值（預設：0.1）'
+    )
+    parser.add_argument(
+        '--daytime-no-ghi',
+        action='store_true',
+        help='白天判斷時不使用 GHI'
+    )
+    parser.add_argument(
+        '--daytime-pvlib-threshold',
+        type=float,
+        default=0.0,
+        help='白天判斷的 PVLib 預測閾值（預設：0.0）'
+    )
+    parser.add_argument(
+        '--daytime-use-time-window',
+        action='store_true',
+        help='白天判斷時也使用時段條件'
+    )
+    parser.add_argument(
+        '--daytime-start-hour',
+        type=int,
+        default=5,
+        help='白天開始小時（預設：5）'
+    )
+    parser.add_argument(
+        '--daytime-end-hour',
+        type=int,
+        default=19,
+        help='白天結束小時（預設：19）'
+    )
+    parser.add_argument(
         '--split-method',
         type=str,
         choices=['random', 'time', 'both', 'walk-forward'],
@@ -136,6 +175,24 @@ def parse_args():
     return parser.parse_args()
 
 
+def build_daytime_config(args):
+    return {
+        'pvlib_threshold': args.daytime_pvlib_threshold,
+        'ghi_threshold': args.daytime_ghi_threshold,
+        'use_ghi': not args.daytime_no_ghi,
+        'use_time_window': args.daytime_use_time_window,
+        'day_start_hour': args.daytime_start_hour,
+        'day_end_hour': args.daytime_end_hour,
+    }
+
+
+def filter_daytime_samples(corrector, X, y):
+    day_mask = corrector.build_daytime_mask(X)
+    X_day = X.loc[day_mask]
+    y_day = y.loc[X_day.index]
+    return X_day, y_day, day_mask
+
+
 def main():
     args = parse_args()
 
@@ -147,6 +204,7 @@ def main():
     print(f"實際發電數據路徑：{args.actual_path}")
     print(f"模型輸出路徑：{args.model_output}")
     print(f"測試集比例：{args.test_size}")
+    print(f"白天樣本過濾：{args.daytime_only}")
     print(f"切分方式：{args.split_method}")
     if args.split_method == 'walk-forward':
         print(
@@ -234,11 +292,20 @@ def main():
     # ----------------------------------------------------------------
     print()
     print("[Step 5] 訓練 ML 偏差修正模型...")
-    base_corrector = MLBiasCorrector(model_path=args.model_output)
+    daytime_config = build_daytime_config(args)
+    base_corrector = MLBiasCorrector(
+        model_path=args.model_output,
+        daytime_config=daytime_config,
+    )
     X, y = base_corrector.prepare_training_data(weather_train, pvlib_kw, actual_kw)
-    # 這裡需要寫一個Daytime Focus 的資料提取方法，確保訓練資料只包含白天的數據（例如：GHI > 0）
-    # X = X[X['GHI'] > 0]
-    # y = y[X.index]
+
+    if args.daytime_only:
+        X, y, day_mask = filter_daytime_samples(base_corrector, X, y)
+        print(f"  白天樣本過濾後剩餘：{len(X)} 筆（遮罩命中 {int(day_mask.sum())} 筆）")
+
+        if len(X) == 0:
+            print("[錯誤] 白天樣本過濾後沒有可用資料，請調整白天判斷條件")
+            sys.exit(1)
 
     print(f"  訓練特徵筆數：{len(X)}")
     print(f"  訓練特徵欄位：{list(X.columns)}")

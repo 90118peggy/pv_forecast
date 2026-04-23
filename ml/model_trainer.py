@@ -15,12 +15,20 @@ class MLBiasCorrector:
     用途：學習 PVLib 物理預測和實際發電量之間的偏差，並進行修正。
     """
     
-    def __init__(self, model_path='models/bias_corrector.pkl'):
+    def __init__(self, model_path='models/bias_corrector.pkl', daytime_config=None):
         """
         初始化偏差修正模型
 
         Args:
             model_path: 模型儲存路徑，預設為 'models/bias_corrector.pkl'
+            daytime_config: 白天判斷設定字典，若為 None 則使用預設設定。
+                           支援的鍵值：
+                           - pvlib_threshold: PVLib 預測值閾值（預設 0.00）
+                           - ghi_threshold: GHI 閾值（預設 0.1）
+                           - use_ghi: 是否使用 GHI 判斷（預設 True）
+                           - use_time_window: 是否啟用時段判斷（預設 False）
+                           - day_start_hour: 白天開始小時（預設 5）
+                           - day_end_hour: 白天結束小時（預設 19）
         """
 
         self.model_path = model_path
@@ -33,7 +41,9 @@ class MLBiasCorrector:
         )
         self.feature_names = None
         self.is_trained = False
-        self.daytime_config = {
+        
+        # 預設白天判斷設定
+        default_daytime_config = {
             'pvlib_threshold': 0.00,  # PVLib 預測值大於此閾值視為白天
             'ghi_threshold': 0.1,    # GHI 大於此閾值視為白天
             'use_ghi': True,         # 是否使用 GHI 作為輔助判斷
@@ -41,6 +51,12 @@ class MLBiasCorrector:
             'day_start_hour': 5,     # 白天開始小時 (含)
             'day_end_hour': 19       # 白天結束小時 (不含)
         }
+        
+        # 如果提供了自訂設定，則合併到預設值上
+        if daytime_config is not None:
+            self.daytime_config = {**default_daytime_config, **daytime_config}
+        else:
+            self.daytime_config = default_daytime_config
 
     def prepare_training_data(self, weather_df, pvlib_predictions, actual_power):
         """
