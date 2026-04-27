@@ -315,7 +315,7 @@ def main():
     metrics_by_split = {}
 
     if args.split_method == 'walk-forward':
-        wf_trainer = MLBiasCorrector(model_path=args.model_output)
+        wf_trainer = MLBiasCorrector(model_path=args.model_output, daytime_config=daytime_config)
         wf_trainer.feature_names = list(base_corrector.feature_names)
 
         wf_metrics = wf_trainer.evaluate_walk_forward(
@@ -358,7 +358,7 @@ def main():
         print(f"    平均 RMSE：{wf_metrics['test_rmse_kW'].mean():.4f} kW")
         print(f"    平均 Accuracy：{wf_metrics['accuracy_percent_peak_norm'].mean():.2f}%")
 
-        saver = MLBiasCorrector(model_path=args.model_output)
+        saver = MLBiasCorrector(model_path=args.model_output, daytime_config=daytime_config)
         saver.feature_names = list(base_corrector.feature_names)
 
         if args.wf_save_train_mode == 'all-data':
@@ -408,7 +408,7 @@ def main():
         selected_split = f"walk-forward ({args.wf_strategy})"
     else:
         for split_method in split_methods:
-            trainer = MLBiasCorrector(model_path=args.model_output)
+            trainer = MLBiasCorrector(model_path=args.model_output, daytime_config=daytime_config)
             trainer.feature_names = list(base_corrector.feature_names)
 
             metrics = trainer.train(X, y, test_size=args.test_size, split_method=split_method)
