@@ -16,6 +16,10 @@ app.include_router(prediction_router)
 def health():
     return {'status': 'ok'}
 
+@app.get('/')
+def root():
+    return {'message': 'PV Forecast API is running'}
+
 
 if __name__ == '__main__':
     import uvicorn
