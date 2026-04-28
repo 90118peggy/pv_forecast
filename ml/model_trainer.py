@@ -44,10 +44,7 @@ class MLBiasCorrector:
         
         # 預設白天判斷設定
         default_daytime_config = {
-            'pvlib_threshold': 0.00,  # PVLib 預測值大於此閾值視為白天
-            'ghi_threshold': 0.1,    # GHI 大於此閾值視為白天
-            'use_ghi': True,         # 是否使用 GHI 作為輔助判斷
-            'use_time_window': False,  # 是否啟用時段判斷
+            'daytime_only': False,   # 是否啟用白天時間窗過濾
             'day_start_hour': 5,     # 白天開始小時 (含)
             'day_end_hour': 19       # 白天結束小時 (不含)
         }
@@ -117,8 +114,8 @@ class MLBiasCorrector:
 
         return prediction_data[self.feature_names]
     
-    def build_daytime_mask(self, X):
-        return self._build_daytime_mask(X)
+    def build_daytime_mask(self, X, enabled=None):
+        return self._build_daytime_mask(X, enabled=enabled)
 
     def _split_data(self, X, y, test_size=0.2, split_method='random'):
         """依照指定策略切分訓練/測試資料。"""
@@ -267,7 +264,7 @@ class MLBiasCorrector:
             X_train_fold = X_train
             y_train_fold = y_train
             if daytime_only:
-                mask = self._build_daytime_mask(X_train_fold)
+                mask = self._build_daytime_mask(X_train_fold, enabled=True)
                 X_train_fold = X_train_fold.loc[mask]
                 y_train_fold = y_train_fold.loc[mask]
 
@@ -303,44 +300,32 @@ class MLBiasCorrector:
     
     def _build_daytime_mask(self, 
                             X,
-                            ):
-        """建立白天資料的遮罩，確保訓練資料只包含白天的數據。
-        # 這裡可以根據具體需求實現白天資料的過濾邏輯，例如：
-        - 根據 PVLib 預測值是否大於某個閾值來判斷是否為白天
-        - 或者結合 GHI 值來進行更精確的判斷
+                            enabled=None):
+        """建立白天資料的遮罩。
+
+        預設不啟用白天過濾，直接回傳全部為 True 的遮罩；
+        若啟用，則僅依據時間窗判斷白天。
         """
-        if 'pvlib_prediction' not in X.columns:
-            raise ValueError("X 中缺少 'pvlib_prediction' 欄位，無法根據 PVLib 預測值建立白天遮罩")
+        if enabled is None:
+            enabled = self.daytime_config.get('daytime_only', False)
 
-        pvlib_mask = X['pvlib_prediction'] >= self.daytime_config['pvlib_threshold']
+        if not enabled:
+            return pd.Series(True, index=X.index)
 
-        masks = [pvlib_mask]
+        if not isinstance(X.index, pd.DatetimeIndex):
+            raise ValueError("啟用 daytime_only 時，X.index 必須是 DatetimeIndex")
 
-        if self.daytime_config['use_ghi'] and 'ghi' in X.columns:
-            ghi_mask = X['ghi'] >= self.daytime_config['ghi_threshold']
-            masks.append(ghi_mask)
+        start_hour = int(self.daytime_config.get('day_start_hour', 5))
+        end_hour = int(self.daytime_config.get('day_end_hour', 19))
+        hour_series = pd.Series(X.index.hour, index=X.index)
 
-        if self.daytime_config.get('use_time_window', False):
-            if not isinstance(X.index, pd.DatetimeIndex):
-                raise ValueError("啟用 use_time_window 時，X.index 必須是 DatetimeIndex")
+        # 支援跨日區間，例如 20~6。
+        if start_hour < end_hour:
+            time_mask = (hour_series >= start_hour) & (hour_series < end_hour)
+        else:
+            time_mask = (hour_series >= start_hour) | (hour_series < end_hour)
 
-            start_hour = int(self.daytime_config.get('day_start_hour', 5))
-            end_hour = int(self.daytime_config.get('day_end_hour', 19))
-            hour_series = pd.Series(X.index.hour, index=X.index)
-
-            # 支援跨日區間，例如 20~6。
-            if start_hour < end_hour:
-                time_mask = (hour_series >= start_hour) & (hour_series < end_hour)
-            else:
-                time_mask = (hour_series >= start_hour) | (hour_series < end_hour)
-
-            masks.append(time_mask)
-
-        mask = masks[0]
-        for extra_mask in masks[1:]:
-            mask = mask | extra_mask
-
-        return mask.fillna(False)
+        return time_mask.fillna(False)
 
         
 
@@ -364,7 +349,7 @@ class MLBiasCorrector:
         # 可選：只使用白天資料訓練
         # 使用mask可以讓index對齊，確保X_train和y_train的index一致，避免後續訓練時出現index不匹配的問題。
         if daytime_only:
-            mask = self._build_daytime_mask(X_train)
+            mask = self._build_daytime_mask(X_train, enabled=True)
             X_train = X_train.loc[mask]
             y_train = y_train.loc[mask]
 

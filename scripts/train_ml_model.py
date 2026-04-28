@@ -5,6 +5,14 @@
     # 基本用法（指定訓練數據的時間範圍）
     python scripts/train_ml_model.py --start 2023-01-01 --end 2023-03-07
 
+    # 只使用時間窗的白天樣本（預設不啟用）
+    python scripts/train_ml_model.py \
+        --start 2023-01-01 \
+        --end 2023-03-07 \
+        --daytime-only \
+        --daytime-start-hour 5 \
+        --daytime-end-hour 19
+
     # 完整用法（指定所有路徑）
     python scripts/train_ml_model.py \\
         --start 2023-01-01 \\
@@ -73,29 +81,7 @@ def parse_args():
     parser.add_argument(
         '--daytime-only',
         action='store_true',
-        help='訓練時只使用白天樣本'
-    )
-    parser.add_argument(
-        '--daytime-ghi-threshold',
-        type=float,
-        default=0.1,
-        help='白天判斷的 GHI 閾值（預設：0.1）'
-    )
-    parser.add_argument(
-        '--daytime-no-ghi',
-        action='store_true',
-        help='白天判斷時不使用 GHI'
-    )
-    parser.add_argument(
-        '--daytime-pvlib-threshold',
-        type=float,
-        default=0.0,
-        help='白天判斷的 PVLib 預測閾值（預設：0.0）'
-    )
-    parser.add_argument(
-        '--daytime-use-time-window',
-        action='store_true',
-        help='白天判斷時也使用時段條件'
+        help='只使用時間窗篩選白天樣本（預設關閉）'
     )
     parser.add_argument(
         '--daytime-start-hour',
@@ -177,10 +163,7 @@ def parse_args():
 
 def build_daytime_config(args):
     return {
-        'pvlib_threshold': args.daytime_pvlib_threshold,
-        'ghi_threshold': args.daytime_ghi_threshold,
-        'use_ghi': not args.daytime_no_ghi,
-        'use_time_window': args.daytime_use_time_window,
+        'daytime_only': args.daytime_only,
         'day_start_hour': args.daytime_start_hour,
         'day_end_hour': args.daytime_end_hour,
     }
@@ -204,7 +187,7 @@ def main():
     print(f"實際發電數據路徑：{args.actual_path}")
     print(f"模型輸出路徑：{args.model_output}")
     print(f"測試集比例：{args.test_size}")
-    print(f"白天樣本過濾：{args.daytime_only}")
+    print(f"時間窗白天過濾：{args.daytime_only}")
     print(f"切分方式：{args.split_method}")
     if args.split_method == 'walk-forward':
         print(
@@ -263,9 +246,8 @@ def main():
     pipeline = PVModelPipeline(use_ml_correction=False)
     pvlib_result = pipeline.run(weather_train)
 
-    # pvlib_ac 單位為 W，轉換為 kW 以與實際發電數據一致
-    pvlib_kw = pvlib_result['pvlib_ac'] / 1000.0
-    print(f"  pvlib 預測完成，最大值：{pvlib_kw.max():.4f} kW，平均值：{pvlib_kw.mean():.4f} kW")
+    # pvlib_ac 單位為 W已經轉為kw，轉換為 kW 以與實際發電數據一致
+    print(f"  pvlib 預測完成，最大值：{pvlib_result['pvlib_ac'].max():.4f} kW，平均值：{pvlib_result['pvlib_ac'].mean():.4f} kW")
 
     # ----------------------------------------------------------------
     # Step 4：載入實際發電數據並切割對應時間範圍
@@ -297,7 +279,7 @@ def main():
         model_path=args.model_output,
         daytime_config=daytime_config,
     )
-    X, y = base_corrector.prepare_training_data(weather_train, pvlib_kw, actual_kw)
+    X, y = base_corrector.prepare_training_data(weather_train, pvlib_result['pvlib_ac'], actual_kw)
 
     if args.daytime_only:
         X, y, day_mask = filter_daytime_samples(base_corrector, X, y)

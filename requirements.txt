@@ -1,5 +1,6 @@
 # --- Core ML & PV Modeling --- 
 pvlib >= 0.9.0
+h5py >= 3.0.0
 pandas >= 1.0.0
 numpy >= 1.18.0
 scikit-learn >= 0.22.0

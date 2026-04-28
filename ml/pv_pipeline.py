@@ -1,9 +1,13 @@
 import pandas as pd
+import sys
+import os
 import pvlib
 from pvlib.location import Location
 from pvlib.modelchain import ModelChain
 from pvlib.pvsystem import PVSystem
 from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app import config
 from ml.model_trainer import MLBiasCorrector
@@ -136,6 +140,8 @@ class PVModelPipeline:
         
         # 先做物理模型預測
         pvlib_ac = self._predict_physics(weather_df)
+        # pvlib_ac 的單位為 W，轉換為 kW 以與實際發電數據一致
+        pvlib_ac = pvlib_ac / 1000.0
         print("預測完成，正在處理結果...")
 
         # 再做機器學習偏差修正
@@ -151,7 +157,7 @@ class PVModelPipeline:
 if __name__ == "__main__":
     # 測試 PVModelPipeline 的功能
     from ml.data_loader import load_custom_weather_data
-    pipeline = PVModelPipeline()
+    pipeline = PVModelPipeline(use_ml_correction=False)
 
     # 載入測試用的天氣資料
     weather_data_path = "C:/Users/Pei/OneDrive/桌面/GitHub/pv_forecast/data/processed/processed_weather_data.csv"
@@ -162,4 +168,4 @@ if __name__ == "__main__":
     # 執行預測
     predicted_ac_energy = pipeline.run(weather_df)
     print("預測的交流電能量 (前5行):")
-    print(predicted_ac_energy.head())
+    print(predicted_ac_energy[30:40])
