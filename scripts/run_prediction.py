@@ -22,11 +22,11 @@ def parse_args():
     parser.add_argument('--model', 
                         type=str, 
                         default='models/bias_corrector.pkl', 
-                        help='已經訓練好的模型權重檔案路徑，預設為 best_model.pkl')
+                        help='已經訓練好的模型權重檔案路徑，預設為 models/bias_corrector.pkl')
     parser.add_argument('--input', 
                         type=str, 
                         default='data/processed/processed_weather_data.csv', 
-                        help='要輸入作為預測的 CSV 檔案路徑，必須包含 timestamp 欄位')
+                        help='要輸入作為預測的 CSV 檔案路徑，必須包含 datetime 欄位')
     parser.add_argument('--output', 
                         type=str, 
                         default='data/predictions/prediction_results.csv', 
@@ -35,8 +35,6 @@ def parse_args():
 
 def main():
     args = parse_args()
-    pipeline = PVModelPipeline(model_path=args.model, use_ml_correction=True)
-
     # ------------------------------------------------------------------
     # Step 1: 檢查輸入參數
     # ------------------------------------------------------------------
