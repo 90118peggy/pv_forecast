@@ -80,7 +80,22 @@ class PVModelPipeline:
     def _predict_physics(self, weather_df):
         """執行 PVLib 物理模型預測。"""
         self.modelchain.run_model(weather_df)
-        return self.modelchain.results.ac.rename('pvlib_ac')
+        pvlib_result = self.modelchain.results.ac.rename('pvlib_ac')
+        # 調試：看原始值
+        print(f"[DEBUG] PVLib 原始預測 (例子片段，單位 W):\n{pvlib_result.head(10)}")
+        print(f"[DEBUG] PVLib 預測統計: min={pvlib_result.min()}, max={pvlib_result.max()}, mean={pvlib_result.mean()}")
+
+        # 對於非常小的負值（例如數值上的雜訊或 inverter model 的 sentinel 值），將其裁切為 0
+        try:
+            pvlib_result = pvlib_result.astype(float)
+            neg_count = (pvlib_result < 0).sum()
+            if neg_count > 0:
+                print(f"[WARN] 偵測到 {neg_count} 個負的 pvlib_ac 值，將裁切為 0。原始最小值: {pvlib_result.min()}")
+            pvlib_result = pvlib_result.clip(lower=0.0)
+        except Exception as e:
+            print(f"[WARN] 無法轉換 pvlib_result 型別或裁切：{e}")
+
+        return pvlib_result
 
     def _apply_bias_correction(self, weather_df, pvlib_ac):
         """套用 ML 偏差修正，回傳修正後預測。"""
@@ -157,7 +172,7 @@ class PVModelPipeline:
 if __name__ == "__main__":
     # 測試 PVModelPipeline 的功能
     from ml.data_loader import load_custom_weather_data
-    pipeline = PVModelPipeline(use_ml_correction=False)
+    pipeline = PVModelPipeline(use_ml_correction=True, model_path='models/bias_corrector.pkl')
 
     # 載入測試用的天氣資料
     weather_data_path = "C:/Users/Pei/OneDrive/桌面/GitHub/pv_forecast/data/processed/processed_weather_data.csv"
@@ -168,4 +183,4 @@ if __name__ == "__main__":
     # 執行預測
     predicted_ac_energy = pipeline.run(weather_df)
     print("預測的交流電能量 (前5行):")
-    print(predicted_ac_energy[30:40])
+    print(predicted_ac_energy[40:50])

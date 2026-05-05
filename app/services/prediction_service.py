@@ -1,11 +1,22 @@
 import pandas as pd
+
+from app import config
 from ml.pv_pipeline import PVModelPipeline
 
 pipeline = PVModelPipeline(model_path='models/bias_corrector.pkl', use_ml_correction=True)
 
 
+def normalize_datetime(datetime_value) -> pd.Timestamp:
+    dt = pd.to_datetime(datetime_value)
+
+    if dt.tzinfo is None:
+        return dt.tz_localize(config.STIE_TIMEZONE)
+
+    return dt.tz_convert(config.STIE_TIMEZONE)
+
+
 def build_single_row_weather_df(payload: dict) -> pd.DataFrame:
-    dt = pd.to_datetime(payload['datetime'])
+    dt = normalize_datetime(payload['datetime'])
 
     df = pd.DataFrame([
         {
