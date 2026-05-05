@@ -3,7 +3,16 @@ import pandas as pd
 from app import config
 from ml.pv_pipeline import PVModelPipeline
 
-pipeline = PVModelPipeline(model_path='models/bias_corrector.pkl', use_ml_correction=True)
+_pipeline = None
+
+def get_pipeline():
+    global _pipeline
+    if _pipeline is None:
+        _pipeline = PVModelPipeline(
+            model_path=config.MODEL_PATH, 
+            use_ml_correction=True)
+    return _pipeline
+
 
 
 def normalize_datetime(datetime_value) -> pd.Timestamp:
@@ -43,7 +52,7 @@ def build_single_row_weather_df(payload: dict) -> pd.DataFrame:
 
 def predict_one(payload: dict) -> dict:
     weather_df = build_single_row_weather_df(payload)
-    result = pipeline.run(weather_df)
+    result = get_pipeline().run(weather_df)
     row = result.iloc[0]
 
     return {

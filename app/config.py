@@ -51,6 +51,11 @@ MODULE_PARAMETERS = {
     'R_sh_ref': 300  # 並聯電阻，如果沒有可以先用一個典型值
 }
 
+
+
 # ---- 溫度模型參數 ----
 from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
 TEMPERATURE_PARAMETERS = TEMPERATURE_MODEL_PARAMETERS['sapm']['open_rack_glass_polymer']
+
+# ---- 模型位置 ----
+MODEL_PATH = 'models/bias_corrector.pkl'
