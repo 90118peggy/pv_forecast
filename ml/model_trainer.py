@@ -314,18 +314,22 @@ class MLBiasCorrector:
 
         if not isinstance(X.index, pd.DatetimeIndex):
             raise ValueError("啟用 daytime_only 時，X.index 必須是 DatetimeIndex")
+        
+        if 'ghi' in X.columns:
+            return X['ghi'] > 20
+        return pd.Series(False, index=X.index)
 
-        start_hour = int(self.daytime_config.get('day_start_hour', 5))
-        end_hour = int(self.daytime_config.get('day_end_hour', 19))
-        hour_series = pd.Series(X.index.hour, index=X.index)
+        # start_hour = int(self.daytime_config.get('day_start_hour', 5))
+        # end_hour = int(self.daytime_config.get('day_end_hour', 19))
+        # hour_series = pd.Series(X.index.hour, index=X.index)
 
-        # 支援跨日區間，例如 20~6。
-        if start_hour < end_hour:
-            time_mask = (hour_series >= start_hour) & (hour_series < end_hour)
-        else:
-            time_mask = (hour_series >= start_hour) | (hour_series < end_hour)
+        # # 支援跨日區間，例如 20~6。
+        # if start_hour < end_hour:
+        #     time_mask = (hour_series >= start_hour) & (hour_series < end_hour)
+        # else:
+        #     time_mask = (hour_series >= start_hour) | (hour_series < end_hour)
 
-        return time_mask.fillna(False)
+        # return time_mask.fillna(False)
 
         
 
