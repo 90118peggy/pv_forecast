@@ -82,6 +82,17 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 docker build -t pv-forecast-api .
 ```
 
+## CLI 使用方式
+
+除了 FastAPI 介面之外，這個專案也提供命令列操作方式，可直接在專案根目錄執行單筆預測。
+
+### 單筆預測
+
+```bash
+python -m app.cli predict --datetime "2023-07-01 12:00:00" --temp-air 30.0 --temp-dew 24.0 --ghi 900.0 --dni 750.0 --dhi 120.0 --wind-speed 2.0 --wind-direction 180.0 --albedo 0.2 --pressure 1013.0
+```
+
+
 #### 啟動容器
 ```bash
 docker run --rm -p 8000:8000 pv-forecast-api
