@@ -14,7 +14,7 @@ SITE_LATITUDE = 39.48
 SITE_LONGITUDE = -76.301
 SITE_ALTITUDE = 52.22
 SITE_NAME = 'U.S.'
-SITE_TIMEZONE = 'Etc/GMT+5'
+SITE_TIMEZONE = os.getenv('SITE_TIMEZONE', 'Etc/GMT+5') # 默認使用 GMT+5 時區，根據實際情況調整
 
 # ---- 系統參數 ----
 SURFACE_TILT = 20
