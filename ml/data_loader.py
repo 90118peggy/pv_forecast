@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from app import config
 
-def load_custom_weather_data(file_path, timezone=config.STIE_TIMEZONE):
+def load_custom_weather_data(file_path, timezone=config.SITE_TIMEZONE):
     """
     從 CSV 文件中載入天氣資料，並進行必要的預處理。
     
@@ -36,7 +36,7 @@ def load_custom_weather_data(file_path, timezone=config.STIE_TIMEZONE):
     
     return weather_data
 
-def load_nsrdb_weather_data(email, api_key, latitude, longitude, year, timezone=config.STIE_TIMEZONE):
+def load_nsrdb_weather_data(email, api_key, latitude, longitude, year, timezone=config.SITE_TIMEZONE):
     """
     從 NSRDB 格式的 CSV 文件中載入天氣資料，並進行必要的預處理。
     

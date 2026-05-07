@@ -19,9 +19,9 @@ def normalize_datetime(datetime_value) -> pd.Timestamp:
     dt = pd.to_datetime(datetime_value)
 
     if dt.tzinfo is None:
-        return dt.tz_localize(config.STIE_TIMEZONE)
+        return dt.tz_localize(config.SITE_TIMEZONE)
 
-    return dt.tz_convert(config.STIE_TIMEZONE)
+    return dt.tz_convert(config.SITE_TIMEZONE)
 
 
 def build_single_row_weather_df(payload: dict) -> pd.DataFrame:

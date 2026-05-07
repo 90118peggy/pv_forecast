@@ -1,0 +1,16 @@
+.git
+.gitignore
+__pycache__/
+*/__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+env/
+data/predictions/
+*.md
+pytest.ini
+tests/
+txt/
+.cache.sqlite
+.pytest_cache/

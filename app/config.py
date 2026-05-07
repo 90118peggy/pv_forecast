@@ -6,13 +6,15 @@ API 配置API的模型路徑、參數
 
 """
 
+import os
+
 # ---- 場域參數 ---- 
 
 SITE_LATITUDE = 39.48
 SITE_LONGITUDE = -76.301
 SITE_ALTITUDE = 52.22
 SITE_NAME = 'U.S.'
-STIE_TIMEZONE = 'Etc/GMT+5'
+SITE_TIMEZONE = 'Etc/GMT+5'
 
 # ---- 系統參數 ----
 SURFACE_TILT = 20
@@ -58,4 +60,4 @@ from pvlib.temperature import TEMPERATURE_MODEL_PARAMETERS
 TEMPERATURE_PARAMETERS = TEMPERATURE_MODEL_PARAMETERS['sapm']['open_rack_glass_polymer']
 
 # ---- 模型位置 ----
-MODEL_PATH = 'models/bias_corrector.pkl'
+MODEL_PATH = os.getenv('MODEL_PATH', 'models/bias_corrector.pkl')
