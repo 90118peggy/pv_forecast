@@ -26,6 +26,7 @@
 import argparse
 import sys
 import os
+import json
 import numpy as np
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
@@ -77,6 +78,19 @@ def parse_args():
         type=float,
         default=0.2,
         help='測試集比例，介於 0.0 到 1.0 之間（預設：0.2）'
+    )
+    parser.add_argument(
+        '--model-type',
+        type=str,
+        choices=MLBiasCorrector.get_available_model_types(),
+        default='random_forest',
+        help='偏差修正模型類型（預設：random_forest）'
+    )
+    parser.add_argument(
+        '--model-params',
+        type=str,
+        default='{}',
+        help='模型初始化參數（JSON 字串），例如："{""n_estimators"": 300}"'
     )
     parser.add_argument(
         '--daytime-only',
@@ -176,8 +190,25 @@ def filter_daytime_samples(corrector, X, y):
     return X_day, y_day, day_mask
 
 
+def parse_model_params(raw_value):
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"model-params 不是合法 JSON：{exc}") from exc
+
+    if not isinstance(parsed, dict):
+        raise ValueError("model-params 必須是 JSON 物件，例如 '{\"n_estimators\": 300}'")
+
+    return parsed
+
+
 def main():
     args = parse_args()
+    try:
+        model_params = parse_model_params(args.model_params)
+    except ValueError as exc:
+        print(f"[錯誤] {exc}")
+        sys.exit(1)
 
     print("=" * 60)
     print("PV 發電量 ML 偏差修正模型訓練")
@@ -186,6 +217,8 @@ def main():
     print(f"天氣數據路徑：{args.weather_path}")
     print(f"實際發電數據路徑：{args.actual_path}")
     print(f"模型輸出路徑：{args.model_output}")
+    print(f"模型類型：{args.model_type}")
+    print(f"模型參數：{model_params}")
     print(f"測試集比例：{args.test_size}")
     print(f"時間窗白天過濾：{args.daytime_only}")
     print(f"切分方式：{args.split_method}")
@@ -278,6 +311,8 @@ def main():
     base_corrector = MLBiasCorrector(
         model_path=args.model_output,
         daytime_config=daytime_config,
+        model_type=args.model_type,
+        model_params=model_params,
     )
     X, y = base_corrector.prepare_training_data(weather_train, pvlib_result['pvlib_ac'], actual_kw)
 
@@ -297,7 +332,12 @@ def main():
     metrics_by_split = {}
 
     if args.split_method == 'walk-forward':
-        wf_trainer = MLBiasCorrector(model_path=args.model_output, daytime_config=daytime_config)
+        wf_trainer = MLBiasCorrector(
+            model_path=args.model_output,
+            daytime_config=daytime_config,
+            model_type=args.model_type,
+            model_params=model_params,
+        )
         wf_trainer.feature_names = list(base_corrector.feature_names)
 
         wf_metrics = wf_trainer.evaluate_walk_forward(
@@ -340,7 +380,12 @@ def main():
         print(f"    平均 RMSE：{wf_metrics['test_rmse_kW'].mean():.4f} kW")
         print(f"    平均 Accuracy：{wf_metrics['accuracy_percent_peak_norm'].mean():.2f}%")
 
-        saver = MLBiasCorrector(model_path=args.model_output, daytime_config=daytime_config)
+        saver = MLBiasCorrector(
+            model_path=args.model_output,
+            daytime_config=daytime_config,
+            model_type=args.model_type,
+            model_params=model_params,
+        )
         saver.feature_names = list(base_corrector.feature_names)
 
         if args.wf_save_train_mode == 'all-data':
@@ -390,7 +435,12 @@ def main():
         selected_split = f"walk-forward ({args.wf_strategy})"
     else:
         for split_method in split_methods:
-            trainer = MLBiasCorrector(model_path=args.model_output, daytime_config=daytime_config)
+            trainer = MLBiasCorrector(
+                model_path=args.model_output,
+                daytime_config=daytime_config,
+                model_type=args.model_type,
+                model_params=model_params,
+            )
             trainer.feature_names = list(base_corrector.feature_names)
 
             metrics = trainer.train(X, y, test_size=args.test_size, split_method=split_method)

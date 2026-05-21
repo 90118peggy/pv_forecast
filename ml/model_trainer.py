@@ -1,11 +1,52 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.base import clone
 import joblib
 import os
+from copy import deepcopy
+
+
+AVAILABLE_MODEL_TYPES = {
+    'random_forest': {
+        'builder': RandomForestRegressor,
+        'default_params': {
+            'n_estimators': 100,
+            'max_depth': 15,
+            'min_samples_split': 5,
+            'random_state': 42,
+            'n_jobs': -1,
+        },
+    },
+    'extra_trees': {
+        'builder': ExtraTreesRegressor,
+        'default_params': {
+            'n_estimators': 200,
+            'max_depth': 15,
+            'min_samples_split': 5,
+            'random_state': 42,
+            'n_jobs': -1,
+        },
+    },
+    'gradient_boosting': {
+        'builder': GradientBoostingRegressor,
+        'default_params': {
+            'n_estimators': 200,
+            'learning_rate': 0.05,
+            'max_depth': 3,
+            'random_state': 42,
+        },
+    },
+    'linear_regression': {
+        'builder': LinearRegression,
+        'default_params': {
+            'n_jobs': -1,
+        },
+    },
+}
 
 
 class MLBiasCorrector:
@@ -15,7 +56,14 @@ class MLBiasCorrector:
     用途：學習 PVLib 物理預測和實際發電量之間的偏差，並進行修正。
     """
     
-    def __init__(self, model_path='models/bias_corrector.pkl', daytime_config=None):
+    def __init__(
+        self,
+        model_path='models/bias_corrector.pkl',
+        daytime_config=None,
+        model_type='random_forest',
+        model_params=None,
+        model=None,
+    ):
         """
         初始化偏差修正模型
 
@@ -29,16 +77,16 @@ class MLBiasCorrector:
                            - use_time_window: 是否啟用時段判斷（預設 False）
                            - day_start_hour: 白天開始小時（預設 5）
                            - day_end_hour: 白天結束小時（預設 19）
+            model_type: 內建模型名稱，支援 random_forest / extra_trees /
+                        gradient_boosting / linear_regression
+            model_params: 模型初始化參數，會覆蓋 model_type 的預設參數
+            model: 可直接傳入已初始化模型；若有提供，會忽略 model_type/model_params
         """
 
         self.model_path = model_path
-        self.model = RandomForestRegressor(
-            n_estimators=100,
-            max_depth=15,
-            min_samples_split=5,
-            random_state=42,
-            n_jobs=-1
-        )
+        self.model_type = model_type
+        self.model_params = model_params or {}
+        self.model = self._init_model(model=model)
         self.feature_names = None
         self.is_trained = False
         
@@ -54,6 +102,31 @@ class MLBiasCorrector:
             self.daytime_config = {**default_daytime_config, **daytime_config}
         else:
             self.daytime_config = default_daytime_config
+
+    @staticmethod
+    def get_available_model_types():
+        return list(AVAILABLE_MODEL_TYPES.keys())
+
+    def _init_model(self, model=None):
+        if model is not None:
+            if not hasattr(model, 'fit') or not hasattr(model, 'predict'):
+                raise ValueError("自訂 model 必須至少實作 fit() 與 predict()")
+
+            if hasattr(model, 'get_params'):
+                self.model_params = model.get_params(deep=False)
+            self.model_type = model.__class__.__name__.lower()
+            return model
+
+        if self.model_type not in AVAILABLE_MODEL_TYPES:
+            raise ValueError(
+                f"不支援的 model_type: {self.model_type}。"
+                f"可用模型: {self.get_available_model_types()}"
+            )
+
+        spec = AVAILABLE_MODEL_TYPES[self.model_type]
+        init_params = {**spec['default_params'], **self.model_params}
+        self.model_params = init_params
+        return spec['builder'](**init_params)
 
     def prepare_training_data(self, weather_df, pvlib_predictions, actual_power):
         """
@@ -259,7 +332,10 @@ class MLBiasCorrector:
 
         records = []
         for fold, (X_train, X_test, y_train, y_test) in enumerate(splits, start=1):
-            fold_model = clone(self.model)
+            try:
+                fold_model = clone(self.model)
+            except Exception:
+                fold_model = deepcopy(self.model)
 
             X_train_fold = X_train
             y_train_fold = y_train
@@ -408,7 +484,9 @@ class MLBiasCorrector:
         payload = {
             'model': self.model,
             'feature_names': self.feature_names,
-            'daytime_config': self.daytime_config
+            'daytime_config': self.daytime_config,
+            'model_type': self.model_type,
+            'model_params': self.model_params,
         }
         joblib.dump(payload, self.model_path)
         print(f"模型已儲存至: {self.model_path}")
@@ -423,8 +501,15 @@ class MLBiasCorrector:
                 self.model = payload['model']
                 self.daytime_config = payload.get('daytime_config', self.daytime_config)
                 self.feature_names = payload.get('feature_names')
+                self.model_type = payload.get('model_type', self.model.__class__.__name__.lower())
+                if hasattr(self.model, 'get_params'):
+                    self.model_params = payload.get('model_params', self.model.get_params(deep=False))
+                else:
+                    self.model_params = payload.get('model_params', {})
             else:
                 self.model = payload
+                self.model_type = self.model.__class__.__name__.lower()
+                self.model_params = self.model.get_params(deep=False) if hasattr(self.model, 'get_params') else {}
 
             self.is_trained = True
             print(f"模型已從 {self.model_path} 載入")
